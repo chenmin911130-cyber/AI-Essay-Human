@@ -10,6 +10,8 @@ import {
   FileText,
 } from "lucide-react";
 import { LiveScore, ScoreComparison } from "@/components/score-badge";
+import { FileUpload } from "@/components/file-upload";
+import { ExportButton } from "@/components/export-button";
 import { countWords } from "@/lib/utils";
 import type { DetectionResult } from "@/lib/detection";
 import type { HumanizeIntensity } from "@/lib/humanize-rules";
@@ -38,6 +40,7 @@ const INTENSITY_OPTIONS: { value: HumanizeIntensity; label: string }[] = [
 export function HumanizerApp() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
+  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
   const [mode, setMode] = useState<HumanizeMode>("rules");
   const [intensity, setIntensity] = useState<HumanizeIntensity>("standard");
   const [loading, setLoading] = useState(false);
@@ -47,7 +50,7 @@ export function HumanizerApp() {
 
   const handleHumanize = async () => {
     if (!input.trim()) {
-      setError("请先输入 Essay 内容");
+      setError("请先输入或上传 Essay 内容");
       return;
     }
 
@@ -82,6 +85,21 @@ export function HumanizerApp() {
     }
   };
 
+  const handleFileLoaded = (text: string, filename: string) => {
+    setInput(text);
+    setUploadedFilename(filename);
+    setOutput("");
+    setResult(null);
+    setError("");
+  };
+
+  const handleClearFile = () => {
+    setUploadedFilename(null);
+    setInput("");
+    setOutput("");
+    setResult(null);
+  };
+
   const handleCopy = async () => {
     if (!output) return;
     await navigator.clipboard.writeText(output);
@@ -92,6 +110,7 @@ export function HumanizerApp() {
   const handleReset = () => {
     setInput("");
     setOutput("");
+    setUploadedFilename(null);
     setResult(null);
     setError("");
   };
@@ -154,11 +173,22 @@ export function HumanizerApp() {
               {countWords(input)} 字 · {input.length} 字符
             </span>
           </div>
+
+          <FileUpload
+            onFileLoaded={handleFileLoaded}
+            currentFilename={uploadedFilename}
+            onClear={handleClearFile}
+            disabled={loading}
+          />
+
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="粘贴你的 AI 生成的 Essay 内容..."
-            className="h-72 w-full resize-none rounded-xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:ring-violet-900"
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (uploadedFilename) setUploadedFilename(null);
+            }}
+            placeholder="粘贴内容，或使用上方上传 .txt / .md / .docx 文件..."
+            className="h-60 w-full resize-none rounded-xl border border-zinc-200 bg-white p-4 text-sm leading-relaxed outline-none transition-colors focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:ring-violet-900"
           />
           {input.trim() && !result && <LiveScore text={input} />}
         </div>
@@ -170,7 +200,7 @@ export function HumanizerApp() {
               人性化结果
             </label>
             {output && (
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopy}
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -182,6 +212,10 @@ export function HumanizerApp() {
                   )}
                   {copied ? "已复制" : "复制"}
                 </button>
+                <ExportButton
+                  content={output}
+                  originalFilename={uploadedFilename}
+                />
               </div>
             )}
           </div>
@@ -200,6 +234,16 @@ export function HumanizerApp() {
       </div>
 
       {result && <ScoreComparison before={result.beforeScore} after={result.afterScore} />}
+
+      {output && result && (
+        <div className="flex justify-center">
+          <ExportButton
+            content={output}
+            originalFilename={uploadedFilename}
+            size="lg"
+          />
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-300">
