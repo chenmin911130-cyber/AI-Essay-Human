@@ -32,13 +32,14 @@ npm run dev
 
 ```bash
 cp .env.example .env.local
-# 编辑 .env.local，填入 OPENROUTER_API_KEY
+# 编辑 .env.local，填入 REWRITEAI_API_KEY
 ```
 
 | 变量 | 说明 | 必填 |
 |------|------|------|
-| `OPENROUTER_API_KEY` | OpenRouter API 密钥（推荐，支持 `sk-or-v1-` 格式） | AI/混合模式需要 |
-| `OPENROUTER_MODEL` | 模型 ID，默认 `openai/gpt-4o-mini` | 否 |
+| `REWRITEAI_API_KEY` | RewriteAI 降 AI 专用密钥（推荐，`rw_sk_` 格式） | AI/混合模式首选 |
+| `OPENROUTER_API_KEY` | OpenRouter 备用密钥 | 否 |
+| `OPENROUTER_MODEL` | OpenRouter 模型 ID，默认 `openai/gpt-4o-mini` | 否 |
 | `OPENAI_API_KEY` | OpenAI 直连密钥（可选替代） | 否 |
 
 ## 技术栈
@@ -66,7 +67,13 @@ vercel login
 vercel --prod
 ```
 
-在 Vercel 项目设置中添加 `OPENROUTER_API_KEY` 环境变量即可启用 AI 模式。
+在 Vercel 项目 **Settings → Environment Variables** 中添加：
+
+```
+REWRITEAI_API_KEY = rw_sk_你的密钥
+```
+
+保存后重新部署，AI / 混合模式即可使用 RewriteAI 专用降 AI 引擎。
 
 ### 方式三：GitHub Actions 自动部署
 
