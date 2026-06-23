@@ -1,6 +1,6 @@
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { NextResponse } from "next/server";
+import { getAiModel, hasAiProvider } from "@/lib/ai-provider";
 import { estimateAiScore } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
 import { buildHumanizePrompt } from "@/lib/prompts";
@@ -39,21 +39,20 @@ export async function POST(request: Request) {
     }
 
     if (mode === "ai" || mode === "hybrid") {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
+      const model = getAiModel();
+      if (!model) {
         if (mode === "ai") {
           return NextResponse.json(
             {
               error:
-                "AI 模式需要配置 OPENAI_API_KEY 环境变量。请使用「规则模式」或配置 API Key。",
+                "AI 模式需要配置 OPENROUTER_API_KEY 或 OPENAI_API_KEY。请使用「规则模式」或配置 API Key。",
             },
             { status: 503 }
           );
         }
       } else {
-        const openai = createOpenAI({ apiKey });
         const { text: aiResult } = await generateText({
-          model: openai("gpt-4o-mini"),
+          model,
           prompt: buildHumanizePrompt(humanized, intensity, language),
           temperature: intensity === "light" ? 0.5 : intensity === "standard" ? 0.7 : 0.85,
           maxOutputTokens: Math.min(4096, Math.ceil(text.length * 1.5)),
@@ -62,7 +61,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (mode === "hybrid" && process.env.OPENAI_API_KEY) {
+    if (mode === "hybrid" && hasAiProvider()) {
       humanized = humanizeWithRules(humanized, "light");
     }
 
