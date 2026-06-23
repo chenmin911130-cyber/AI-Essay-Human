@@ -46,15 +46,37 @@ cp .env.example .env.local
 - [Vercel AI SDK](https://sdk.vercel.ai/) — AI 文本生成
 - TypeScript
 
-## 部署
+## 部署到 Vercel
 
-推荐部署到 [Vercel](https://vercel.com)：
+### 方式一：一键导入（推荐）
+
+点击以下链接，用 GitHub 账号登录 Vercel 后一键部署：
+
+**https://vercel.com/new/clone?repository-url=https://github.com/chenmin911130-cyber/AI-Essay-Human**
+
+部署完成后会得到一个 `*.vercel.app` 永久地址。
+
+### 方式二：CLI 部署
 
 ```bash
-npx vercel
+npm install -g vercel
+vercel login
+vercel --prod
 ```
 
 在 Vercel 项目设置中添加 `OPENAI_API_KEY` 环境变量即可启用 AI 模式。
+
+### 方式三：GitHub Actions 自动部署
+
+在 GitHub 仓库 Settings → Secrets 中添加：
+
+| Secret | 说明 |
+|--------|------|
+| `VERCEL_TOKEN` | [Vercel Account Tokens](https://vercel.com/account/tokens) |
+| `VERCEL_ORG_ID` | 运行 `vercel link` 后在 `.vercel/project.json` 中查看 |
+| `VERCEL_PROJECT_ID` | 同上 |
+
+推送代码到 `main` 分支后会自动部署。
 
 ## 免责声明
 
