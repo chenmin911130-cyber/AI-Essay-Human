@@ -12,6 +12,7 @@ import {
 import { LiveScore, ScoreComparison } from "@/components/score-badge";
 import { FileUpload } from "@/components/file-upload";
 import { ExportButton } from "@/components/export-button";
+import { QaReportPanel, type QaReport } from "@/components/qa-report";
 import { countWords } from "@/lib/utils";
 import type { DetectionResult } from "@/lib/detection";
 import type { HumanizeIntensity } from "@/lib/humanize-rules";
@@ -23,11 +24,12 @@ interface HumanizeResult {
   beforeScore: DetectionResult;
   afterScore: DetectionResult;
   improvement: number;
+  qa?: QaReport;
 }
 
 const MODE_OPTIONS: { value: HumanizeMode; label: string; desc: string }[] = [
   { value: "rules", label: "规则模式", desc: "无需 API，即时处理" },
-  { value: "hybrid", label: "混合模式", desc: "规则 + AI，效果最佳" },
+  { value: "hybrid", label: "混合模式", desc: "AI + 严格质检（推荐）" },
   { value: "ai", label: "AI 模式", desc: "纯 AI 深度改写" },
 ];
 
@@ -41,8 +43,9 @@ export function HumanizerApp() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
-  const [mode, setMode] = useState<HumanizeMode>("rules");
-  const [intensity, setIntensity] = useState<HumanizeIntensity>("standard");
+  const [mode, setMode] = useState<HumanizeMode>("hybrid");
+  const [intensity, setIntensity] = useState<HumanizeIntensity>("aggressive");
+  const [strict, setStrict] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<HumanizeResult | null>(null);
@@ -61,7 +64,7 @@ export function HumanizerApp() {
       const res = await fetch("/api/humanize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, mode, intensity }),
+        body: JSON.stringify({ text: input, mode, intensity, strict, targetScore: 30 }),
       });
 
       const data = await res.json();
@@ -77,6 +80,7 @@ export function HumanizerApp() {
         beforeScore: data.beforeScore,
         afterScore: data.afterScore,
         improvement: data.improvement,
+        qa: data.qa,
       });
     } catch {
       setError("网络错误，请稍后重试");
@@ -162,6 +166,25 @@ export function HumanizerApp() {
         </div>
       </div>
 
+      {mode !== "rules" && (
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950">
+          <input
+            type="checkbox"
+            checked={strict}
+            onChange={(e) => setStrict(e.target.checked)}
+            className="h-4 w-4 rounded border-violet-300 text-violet-600"
+          />
+          <div>
+            <div className="text-sm font-medium text-violet-800 dark:text-violet-200">
+              严格质检模式
+            </div>
+            <div className="text-xs text-violet-600 dark:text-violet-400">
+              多轮迭代 + 6 项质检，AI 率目标 ≤30%，自动选最优结果
+            </div>
+          </div>
+        </label>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -235,6 +258,8 @@ export function HumanizerApp() {
 
       {result && <ScoreComparison before={result.beforeScore} after={result.afterScore} />}
 
+      {result?.qa && <QaReportPanel qa={result.qa} />}
+
       {output && result && (
         <div className="flex justify-center">
           <ExportButton
@@ -267,7 +292,7 @@ export function HumanizerApp() {
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              处理中...
+              {strict && mode !== "rules" ? "严格质检处理中..." : "处理中..."}
             </>
           ) : (
             <>

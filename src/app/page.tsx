@@ -30,7 +30,7 @@ export default function Home() {
 
         <footer className="mt-12 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-400 dark:border-zinc-800">
           <p>
-            AI 率估算基于文本特征启发式分析，仅供参考。规则模式无需 API Key 即可使用。
+            AI 率估算基于文本特征启发式分析，仅供参考，与 GPTZero/Turnitin 等第三方结果可能不同。开启严格质检可多轮迭代至目标 AI 率。
           </p>
         </footer>
       </div>

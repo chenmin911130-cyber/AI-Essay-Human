@@ -130,6 +130,22 @@ function repetitiveStarters(sentences: string[]): number {
   return maxRepeat / sentences.length;
 }
 
+const ALL_AI_PHRASES = [...AI_PHRASES_EN, ...AI_PHRASES_ZH];
+
+export function findAiPhrases(text: string): string[] {
+  const lower = text.toLowerCase();
+  const found: string[] = [];
+
+  for (const phrase of ALL_AI_PHRASES) {
+    const regex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    if (regex.test(lower) || regex.test(text)) {
+      found.push(phrase);
+    }
+  }
+
+  return [...new Set(found)];
+}
+
 function phraseDensity(text: string, phrases: string[]): number {
   const lower = text.toLowerCase();
   let hits = 0;

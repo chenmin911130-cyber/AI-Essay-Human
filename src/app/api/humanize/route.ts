@@ -1,11 +1,9 @@
-import { generateText } from "ai";
 import { NextResponse } from "next/server";
-import { getAiModel, hasAiProvider } from "@/lib/ai-provider";
 import { estimateAiScore } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
-import { buildHumanizePrompt } from "@/lib/prompts";
-import { hasRewriteAiKey, humanizeWithRewriteAi } from "@/lib/rewriteai";
-import { detectLanguage } from "@/lib/utils";
+import { hasRewriteAiKey } from "@/lib/rewriteai";
+import { hasAiProvider } from "@/lib/ai-provider";
+import { runStrictPipeline } from "@/lib/qa-pipeline";
 
 export type HumanizeMode = "rules" | "ai" | "hybrid";
 
@@ -13,32 +11,20 @@ interface HumanizeRequest {
   text: string;
   mode?: HumanizeMode;
   intensity?: HumanizeIntensity;
-}
-
-async function humanizeWithLlm(
-  text: string,
-  intensity: HumanizeIntensity,
-  language: ReturnType<typeof detectLanguage>
-): Promise<string> {
-  const model = getAiModel();
-  if (!model) {
-    throw new Error("未配置 LLM API Key");
-  }
-
-  const { text: aiResult } = await generateText({
-    model,
-    prompt: buildHumanizePrompt(text, intensity, language),
-    temperature: intensity === "light" ? 0.5 : intensity === "standard" ? 0.7 : 0.85,
-    maxOutputTokens: Math.min(4096, Math.ceil(text.length * 1.5)),
-  });
-
-  return aiResult.trim();
+  strict?: boolean;
+  targetScore?: number;
 }
 
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as HumanizeRequest;
-    const { text, mode = "hybrid", intensity = "standard" } = body;
+    const {
+      text,
+      mode = "hybrid",
+      intensity = "standard",
+      strict = true,
+      targetScore = 30,
+    } = body;
 
     if (!text?.trim()) {
       return NextResponse.json({ error: "请输入要处理的文本" }, { status: 400 });
@@ -51,57 +37,72 @@ export async function POST(request: Request) {
       );
     }
 
-    const beforeScore = estimateAiScore(text);
-    let humanized = text;
-    const language = detectLanguage(text);
-    let provider: "rewriteai" | "llm" | "rules" = "rules";
-    let rewriteMeta: { wordsUsed?: number; alternatives?: string[] } = {};
+    if (mode === "rules") {
+      const beforeScore = estimateAiScore(text);
+      const humanized = humanizeWithRules(text, intensity);
+      const afterScore = estimateAiScore(humanized);
 
-    if (mode === "rules" || mode === "hybrid") {
-      humanized = humanizeWithRules(humanized, intensity);
-      provider = "rules";
+      return NextResponse.json({
+        original: text,
+        humanized,
+        beforeScore,
+        afterScore,
+        mode,
+        intensity,
+        strict: false,
+        provider: "rules",
+        improvement: beforeScore.score - afterScore.score,
+        qa: {
+          passed: afterScore.score <= targetScore,
+          checks: [
+            {
+              id: "ai_score",
+              name: "AI 率达标",
+              passed: afterScore.score <= targetScore,
+              message: `AI 率 ${afterScore.score}%`,
+            },
+          ],
+          passes: 1,
+          targetScore,
+          confidence: afterScore.score <= targetScore ? "medium" : "low",
+          warning:
+            afterScore.score > targetScore
+              ? "规则模式能力有限，建议使用混合/AI 模式并开启严格质检。"
+              : undefined,
+        },
+      });
     }
 
-    if (mode === "ai" || mode === "hybrid") {
-      if (hasRewriteAiKey()) {
-        const result = await humanizeWithRewriteAi(humanized);
-        humanized = result.text;
-        provider = "rewriteai";
-        rewriteMeta = {
-          wordsUsed: result.wordsUsed,
-          alternatives: result.alternatives,
-        };
-      } else if (hasAiProvider()) {
-        humanized = await humanizeWithLlm(humanized, intensity, language);
-        provider = "llm";
-
-        if (mode === "hybrid") {
-          humanized = humanizeWithRules(humanized, "light");
-        }
-      } else if (mode === "ai") {
-        return NextResponse.json(
-          {
-            error:
-              "AI 模式需要配置 REWRITEAI_API_KEY（推荐）或 OPENROUTER_API_KEY / OPENAI_API_KEY。",
-          },
-          { status: 503 }
-        );
-      }
+    if (mode === "ai" && !hasRewriteAiKey() && !hasAiProvider()) {
+      return NextResponse.json(
+        {
+          error:
+            "AI 模式需要配置 REWRITEAI_API_KEY（推荐）或 OPENROUTER_API_KEY / OPENAI_API_KEY。",
+        },
+        { status: 503 }
+      );
     }
 
-    const afterScore = estimateAiScore(humanized);
+    const result = await runStrictPipeline({
+      text,
+      intensity,
+      targetScore,
+      strict,
+    });
 
     return NextResponse.json({
       original: text,
-      humanized,
-      beforeScore,
-      afterScore,
+      humanized: result.text,
+      beforeScore: result.beforeScore,
+      afterScore: result.afterScore,
       mode,
       intensity,
-      language,
-      provider,
-      improvement: beforeScore.score - afterScore.score,
-      ...rewriteMeta,
+      strict,
+      targetScore,
+      provider: result.provider,
+      improvement: result.beforeScore.score - result.afterScore.score,
+      wordsUsed: result.wordsUsed,
+      qa: result.qa,
     });
   } catch (error) {
     console.error("Humanize error:", error);
