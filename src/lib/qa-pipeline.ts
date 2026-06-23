@@ -3,13 +3,12 @@
  * Iterates, validates, and picks the best candidate until checks pass or max passes reached.
  */
 
+import { generateText } from "ai";
 import { estimateAiScore, findAiPhrases, type DetectionResult } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
-import { hasRewriteAiKey, humanizeWithRewriteAi } from "@/lib/rewriteai";
-import { getAiModel, hasAiProvider } from "@/lib/ai-provider";
+import { getAiModel, getAiProviderName, hasAiProvider } from "@/lib/ai-provider";
 import { buildHumanizePrompt } from "@/lib/prompts";
 import { detectLanguage } from "@/lib/utils";
-import { generateText } from "ai";
 
 export interface QaCheck {
   id: string;
@@ -27,13 +26,14 @@ export interface QaReport {
   warning?: string;
 }
 
+export type PipelineProvider = "openrouter" | "openai" | "rules";
+
 export interface StrictPipelineResult {
   text: string;
   beforeScore: DetectionResult;
   afterScore: DetectionResult;
   qa: QaReport;
-  provider: "rewriteai" | "llm" | "rules";
-  wordsUsed?: number;
+  provider: PipelineProvider;
 }
 
 const DEFAULT_TARGET_SCORE = 30;
@@ -50,15 +50,20 @@ interface PipelineOptions {
 async function humanizeWithLlm(
   text: string,
   intensity: HumanizeIntensity,
-  language: ReturnType<typeof detectLanguage>
+  language: ReturnType<typeof detectLanguage>,
+  temperature?: number
 ): Promise<string> {
   const model = getAiModel();
   if (!model) throw new Error("未配置 LLM API Key");
 
+  const temp =
+    temperature ??
+    (intensity === "light" ? 0.5 : intensity === "standard" ? 0.7 : 0.85);
+
   const { text: aiResult } = await generateText({
     model,
     prompt: buildHumanizePrompt(text, intensity, language),
-    temperature: intensity === "light" ? 0.5 : intensity === "standard" ? 0.7 : 0.85,
+    temperature: temp,
     maxOutputTokens: Math.min(4096, Math.ceil(text.length * 1.5)),
   });
 
@@ -83,21 +88,16 @@ async function humanizeOnce(
   text: string,
   intensity: HumanizeIntensity,
   language: ReturnType<typeof detectLanguage>
-): Promise<{ text: string; provider: "rewriteai" | "llm" | "rules"; wordsUsed?: number }> {
-  const candidates: string[] = [];
-
-  if (hasRewriteAiKey()) {
-    const result = await humanizeWithRewriteAi(text);
-    candidates.push(result.text, ...result.alternatives);
+): Promise<{ text: string; provider: PipelineProvider }> {
+  if (hasAiProvider()) {
+    const providerName = getAiProviderName() ?? "openrouter";
+    const candidates = await Promise.all([
+      humanizeWithLlm(text, intensity, language, 0.7),
+      humanizeWithLlm(text, intensity, language, 0.9),
+    ]);
     const best = pickBestCandidate(candidates);
     const polished = humanizeWithRules(best.text, "aggressive");
-    return { text: polished, provider: "rewriteai", wordsUsed: result.wordsUsed };
-  }
-
-  if (hasAiProvider()) {
-    const aiText = await humanizeWithLlm(text, intensity, language);
-    const polished = humanizeWithRules(aiText, "aggressive");
-    return { text: polished, provider: "llm" };
+    return { text: polished, provider: providerName };
   }
 
   return { text: humanizeWithRules(text, "aggressive"), provider: "rules" };
@@ -220,22 +220,19 @@ export async function runStrictPipeline(
       afterScore,
       qa: buildQaReport(checks, 1, targetScore),
       provider: result.provider,
-      wordsUsed: result.wordsUsed,
     };
   }
 
   let current = text;
   let bestText = text;
   let bestAfterScore = beforeScore;
-  let provider: "rewriteai" | "llm" | "rules" = "rules";
-  let totalWordsUsed = 0;
+  let provider: PipelineProvider = "rules";
   let passCount = 0;
 
   for (let pass = 1; pass <= MAX_PASSES; pass++) {
     passCount = pass;
     const result = await humanizeOnce(current, intensity, language);
     provider = result.provider;
-    if (result.wordsUsed) totalWordsUsed += result.wordsUsed;
 
     const afterScore = estimateAiScore(result.text);
     if (afterScore.score < bestAfterScore.score) {
@@ -255,7 +252,6 @@ export async function runStrictPipeline(
         afterScore,
         qa: buildQaReport(checks, pass, targetScore),
         provider,
-        wordsUsed: totalWordsUsed || undefined,
       };
     }
 
@@ -269,7 +265,7 @@ export async function runStrictPipeline(
       continue;
     }
 
-    if (pass < MAX_PASSES && hasRewriteAiKey()) {
+    if (pass < MAX_PASSES && hasAiProvider()) {
       current = result.text;
       continue;
     }
@@ -291,6 +287,5 @@ export async function runStrictPipeline(
     afterScore: bestAfterScore,
     qa: buildQaReport(finalChecks, passCount, targetScore),
     provider,
-    wordsUsed: totalWordsUsed || undefined,
   };
 }

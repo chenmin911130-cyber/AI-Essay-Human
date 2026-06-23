@@ -6,8 +6,8 @@
 
 - **三种处理模式**
   - **规则模式** — 无需 API Key，基于规则即时替换 AI 常见用语
-  - **混合模式** — 规则预处理 + AI 深度改写（推荐，需 API Key）
-  - **AI 模式** — 纯 AI 深度人性化改写（需 API Key）
+  - **混合模式** — OpenRouter AI + 严格质检（推荐，需 API Key）
+  - **AI 模式** — 纯 OpenRouter 深度改写（需 API Key）
 - **三种改写强度** — 轻度 / 标准 / 深度
 - **AI 率估算** — 处理前后对比，基于文本特征启发式分析
 - **中英文支持** — 自动识别语言并适配改写策略
@@ -28,18 +28,17 @@ npm run dev
 
 ## 环境变量（可选）
 
-如需使用 AI / 混合模式，配置 OpenRouter 或 OpenAI API Key：
+如需使用 AI / 混合模式，配置 OpenRouter API Key：
 
 ```bash
 cp .env.example .env.local
-# 编辑 .env.local，填入 REWRITEAI_API_KEY
+# 编辑 .env.local，填入 OPENROUTER_API_KEY
 ```
 
 | 变量 | 说明 | 必填 |
 |------|------|------|
-| `REWRITEAI_API_KEY` | RewriteAI 降 AI 专用密钥（推荐，`rw_sk_` 格式） | AI/混合模式首选 |
-| `OPENROUTER_API_KEY` | OpenRouter 备用密钥 | 否 |
-| `OPENROUTER_MODEL` | OpenRouter 模型 ID，默认 `openai/gpt-4o-mini` | 否 |
+| `OPENROUTER_API_KEY` | OpenRouter API 密钥（`sk-or-v1-` 格式） | AI/混合模式需要 |
+| `OPENROUTER_MODEL` | 模型 ID，默认 `openai/gpt-4o-mini` | 否 |
 | `OPENAI_API_KEY` | OpenAI 直连密钥（可选替代） | 否 |
 
 ## 技术栈
@@ -70,10 +69,11 @@ vercel --prod
 在 Vercel 项目 **Settings → Environment Variables** 中添加：
 
 ```
-REWRITEAI_API_KEY = rw_sk_你的密钥
+OPENROUTER_API_KEY = sk-or-v1-你的密钥
+OPENROUTER_MODEL = openai/gpt-4o-mini
 ```
 
-保存后重新部署，AI / 混合模式即可使用 RewriteAI 专用降 AI 引擎。
+保存后重新部署，AI / 混合模式即可使用 OpenRouter。
 
 ### 方式三：GitHub Actions 自动部署
 
