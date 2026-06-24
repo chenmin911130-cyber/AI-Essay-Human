@@ -39,10 +39,24 @@ export function hasAiUndetect(): boolean {
 }
 
 /** model: 0=more quality, 1=balance, 2=more human */
-function intensityToModel(intensity: HumanizeIntensity): "0" | "1" | "2" {
+export function intensityToModel(intensity: HumanizeIntensity): "0" | "1" | "2" {
   if (intensity === "light") return "0";
   if (intensity === "standard") return "1";
   return "2";
+}
+
+/** Website Auto-Perfect mode — auto: "1" (costs 2x words). Default on. */
+export function isAiUndetectAutoEnabled(): boolean {
+  const value = process.env.AIUNDETECT_AUTO?.trim().toLowerCase();
+  if (value === "false" || value === "0" || value === "off") return false;
+  return true;
+}
+
+export function getAiUndetectModelLabel(intensity: HumanizeIntensity): string {
+  const model = intensityToModel(intensity);
+  if (model === "0") return "Quality";
+  if (model === "1") return "Balance";
+  return "More Human";
 }
 
 function splitIntoChunks(text: string, maxLen: number): string[] {
@@ -103,7 +117,7 @@ function validateChunkLength(text: string): void {
 async function rewriteChunk(
   text: string,
   intensity: HumanizeIntensity,
-  auto = false
+  auto = isAiUndetectAutoEnabled()
 ): Promise<AiUndetectResult> {
   const { apiKey, email } = getAiUndetectCredentials();
 

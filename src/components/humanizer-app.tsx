@@ -28,6 +28,7 @@ interface HumanizeResult {
   provider?: string;
   remainingWords?: number;
   unchanged?: boolean;
+  aiundetect?: { autoPerfect: boolean; model: string };
   qa?: QaReport;
 }
 
@@ -37,10 +38,10 @@ const MODE_OPTIONS: { value: HumanizeMode; label: string; desc: string }[] = [
   { value: "ai", label: "AI 模式", desc: "纯 AI 深度改写" },
 ];
 
-const INTENSITY_OPTIONS: { value: HumanizeIntensity; label: string }[] = [
-  { value: "light", label: "轻度" },
-  { value: "standard", label: "标准" },
-  { value: "aggressive", label: "深度" },
+const INTENSITY_OPTIONS: { value: HumanizeIntensity; label: string; desc?: string }[] = [
+  { value: "light", label: "Quality", desc: "model 0" },
+  { value: "standard", label: "Balance", desc: "model 1 · 官网默认" },
+  { value: "aggressive", label: "More Human", desc: "model 2" },
 ];
 
 export function HumanizerApp() {
@@ -48,8 +49,8 @@ export function HumanizerApp() {
   const [output, setOutput] = useState("");
   const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
   const [mode, setMode] = useState<HumanizeMode>("hybrid");
-  const [intensity, setIntensity] = useState<HumanizeIntensity>("aggressive");
-  const [strict, setStrict] = useState(true);
+  const [intensity, setIntensity] = useState<HumanizeIntensity>("standard");
+  const [strict, setStrict] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<HumanizeResult | null>(null);
@@ -87,6 +88,7 @@ export function HumanizerApp() {
         provider: data.provider,
         remainingWords: data.remainingWords,
         unchanged: isNearlySameText(input, data.humanized),
+        aiundetect: data.aiundetect,
         qa: data.qa,
       });
     } catch {
@@ -166,7 +168,10 @@ export function HumanizerApp() {
                     : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700"
                 }`}
               >
-                {opt.label}
+                <div>{opt.label}</div>
+                {opt.desc && (
+                  <div className="text-[10px] font-normal text-zinc-500">{opt.desc}</div>
+                )}
               </button>
             ))}
           </div>
@@ -186,7 +191,7 @@ export function HumanizerApp() {
               严格质检模式
             </div>
             <div className="text-xs text-violet-600 dark:text-violet-400">
-              多轮迭代 + 6 项质检，AI 率目标 ≤30%。AIUndetect 要求至少 100 字符。
+              多轮迭代 + 6 项质检。开启 Auto-Perfect 时由 AIUndetect 自动优化，无需此项。
             </div>
           </div>
         </label>
@@ -270,6 +275,7 @@ export function HumanizerApp() {
           <ProviderBadge
             provider={result.provider}
             remainingWords={result.remainingWords}
+            aiundetect={result.aiundetect}
           />
           {result.unchanged && (
             <p className="text-center text-sm text-amber-600 dark:text-amber-400">

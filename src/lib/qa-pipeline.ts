@@ -1,6 +1,10 @@
 import { estimateAiScore, findAiPhrases, type DetectionResult } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
-import { humanizeWithAiUndetect, hasAiUndetect } from "@/lib/aiundetect";
+import {
+  humanizeWithAiUndetect,
+  hasAiUndetect,
+  isAiUndetectAutoEnabled,
+} from "@/lib/aiundetect";
 import { getAiModel, getAiProviderName, hasAiProvider } from "@/lib/ai-provider";
 import { buildHumanizePrompt } from "@/lib/prompts";
 import { detectLanguage, isNearlySameText } from "@/lib/utils";
@@ -113,12 +117,13 @@ async function humanizeOnce(
 }> {
   if (hasAiUndetect()) {
     try {
-      let result = await humanizeWithAiUndetect(text, intensity);
+      const autoPerfect = isAiUndetectAutoEnabled();
+      let result = await humanizeWithAiUndetect(text, intensity, { auto: autoPerfect });
 
-      if (isNearlySameText(text, result.text)) {
-        const preprocessed = humanizeWithRules(text, "aggressive");
+      if (!autoPerfect && isNearlySameText(text, result.text)) {
+        const preprocessed = humanizeWithRules(text, intensity);
         if (!isNearlySameText(text, preprocessed)) {
-          result = await humanizeWithAiUndetect(preprocessed, "aggressive");
+          result = await humanizeWithAiUndetect(preprocessed, intensity, { auto: autoPerfect });
         }
       }
 
@@ -269,8 +274,10 @@ export async function runStrictPipeline(
   const { text, intensity, targetScore = DEFAULT_TARGET_SCORE, strict = true } = options;
   const language = detectLanguage(text);
   const beforeScore = estimateAiScore(text);
+  // Auto-Perfect already iterates on AIUndetect's side — skip our multi-pass rules overlay.
+  const effectiveStrict = strict && !(hasAiUndetect() && isAiUndetectAutoEnabled());
 
-  if (!strict) {
+  if (!effectiveStrict) {
     const result = await humanizeOnce(text, intensity, language);
     const afterScore = estimateAiScore(result.text);
     const checks = runValidationChecks(text, result.text, beforeScore, afterScore, targetScore);
@@ -293,7 +300,7 @@ export async function runStrictPipeline(
   let remainingWords: number | undefined;
   let passCount = 0;
 
-  for (let pass = 1; pass <= MAX_PASSES; pass++) {
+  for (let pass = 1; pass <= MAX_PASSES && effectiveStrict; pass++) {
     passCount = pass;
     const result = await humanizeOnce(current, intensity, language);
     provider = result.provider;

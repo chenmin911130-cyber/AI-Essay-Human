@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { estimateAiScore } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
-import { AIUNDETECT_MIN_CHARS } from "@/lib/aiundetect";
+import {
+  AIUNDETECT_MIN_CHARS,
+  getAiUndetectModelLabel,
+  isAiUndetectAutoEnabled,
+} from "@/lib/aiundetect";
 import { getAiConfigError } from "@/lib/ai-config";
 import { hasAnyAiHumanizer, runStrictPipeline } from "@/lib/qa-pipeline";
 import { isNearlySameText } from "@/lib/utils";
@@ -23,7 +27,7 @@ export async function POST(request: Request) {
       text,
       mode = "hybrid",
       intensity = "standard",
-      strict = true,
+      strict = false,
       targetScore = 30,
     } = body;
 
@@ -107,6 +111,12 @@ export async function POST(request: Request) {
       strict,
       targetScore,
       provider: result.provider,
+      aiundetect: result.provider === "aiundetect"
+        ? {
+            autoPerfect: isAiUndetectAutoEnabled(),
+            model: getAiUndetectModelLabel(intensity),
+          }
+        : undefined,
       improvement: result.beforeScore.score - result.afterScore.score,
       wordsUsed: result.wordsUsed,
       remainingWords: result.remainingWords,
