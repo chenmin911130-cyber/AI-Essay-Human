@@ -22,7 +22,7 @@ export interface AiUndetectResult {
 
 export function hasAiUndetect(): boolean {
   const key = process.env.AIUNDETECT_API_KEY?.trim();
-  const email = process.env.AIUNDETECT_EMAIL?.trim();
+  const email = process.env.AIUNDETECT_EMAIL?.trim().toLowerCase();
   if (!key || !email) return false;
   if (email.includes("example.com") || email.startsWith("your-")) return false;
   return true;
@@ -77,7 +77,7 @@ async function rewriteChunk(
   intensity: HumanizeIntensity
 ): Promise<AiUndetectResult> {
   const apiKey = process.env.AIUNDETECT_API_KEY;
-  const email = process.env.AIUNDETECT_EMAIL;
+  const email = process.env.AIUNDETECT_EMAIL?.trim().toLowerCase();
 
   if (!apiKey || !email) {
     throw new Error("AIUNDETECT_API_KEY 或 AIUNDETECT_EMAIL 未配置");

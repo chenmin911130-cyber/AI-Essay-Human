@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { estimateAiScore } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
+import { getAiConfigError } from "@/lib/ai-config";
 import { hasAnyAiHumanizer, runStrictPipeline } from "@/lib/qa-pipeline";
 
 export type HumanizeMode = "rules" | "ai" | "hybrid";
@@ -73,10 +74,7 @@ export async function POST(request: Request) {
 
     if (!hasAnyAiHumanizer()) {
       return NextResponse.json(
-        {
-          error:
-            "AI 模式需要配置 AIUNDETECT_API_KEY + AIUNDETECT_EMAIL，或 OPENROUTER_API_KEY。",
-        },
+        { error: getAiConfigError() ?? "AI 模式环境变量未配置。" },
         { status: 503 }
       );
     }
