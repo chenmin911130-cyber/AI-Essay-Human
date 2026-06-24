@@ -1,4 +1,4 @@
-import { hasAiUndetect, isAiUndetectAutoEnabled } from "@/lib/aiundetect";
+import { hasAiUndetect, isAiUndetectAutoEnabled, isAiUndetectVerifyEnabled } from "@/lib/aiundetect";
 import { hasAiProvider } from "@/lib/ai-provider";
 
 export function getAiConfigStatus() {
@@ -13,6 +13,7 @@ export function getAiConfigStatus() {
       hasEmail: Boolean(email),
       ready: hasAiUndetect(),
       autoPerfect: hasAiUndetect() && isAiUndetectAutoEnabled(),
+      verifyLoop: hasAiUndetect() && isAiUndetectVerifyEnabled(),
     },
     openrouter: Boolean(openRouter),
     openai: Boolean(openAi),

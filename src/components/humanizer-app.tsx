@@ -28,7 +28,7 @@ interface HumanizeResult {
   provider?: string;
   remainingWords?: number;
   unchanged?: boolean;
-  aiundetect?: { autoPerfect: boolean; model: string };
+  aiundetect?: { autoPerfect: boolean; verifyLoop: boolean; model: string };
   qa?: QaReport;
 }
 
@@ -51,6 +51,7 @@ export function HumanizerApp() {
   const [mode, setMode] = useState<HumanizeMode>("hybrid");
   const [intensity, setIntensity] = useState<HumanizeIntensity>("standard");
   const [strict, setStrict] = useState(false);
+  const [verifyLoop, setVerifyLoop] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<HumanizeResult | null>(null);
@@ -69,7 +70,7 @@ export function HumanizerApp() {
       const res = await fetch("/api/humanize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, mode, intensity, strict, targetScore: 30 }),
+        body: JSON.stringify({ text: input, mode, intensity, strict, verifyLoop, targetScore: 30 }),
       });
 
       const data = await res.json();
@@ -179,22 +180,41 @@ export function HumanizerApp() {
       </div>
 
       {mode !== "rules" && (
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950">
-          <input
-            type="checkbox"
-            checked={strict}
-            onChange={(e) => setStrict(e.target.checked)}
-            className="h-4 w-4 rounded border-violet-300 text-violet-600"
-          />
-          <div>
-            <div className="text-sm font-medium text-violet-800 dark:text-violet-200">
-              严格质检模式
+        <div className="space-y-2">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950">
+            <input
+              type="checkbox"
+              checked={verifyLoop}
+              onChange={(e) => setVerifyLoop(e.target.checked)}
+              className="h-4 w-4 rounded border-emerald-300 text-emerald-600"
+            />
+            <div>
+              <div className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                官网检测循环（推荐）
+              </div>
+              <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                Auto-Perfect 改写后调用 AIUndetect 官网检测 API；若仍有 AI 痕迹则自动继续改写（最多 5 轮）。
+              </div>
             </div>
-            <div className="text-xs text-violet-600 dark:text-violet-400">
-              多轮迭代 + 6 项质检。开启 Auto-Perfect 时由 AIUndetect 自动优化，无需此项。
+          </label>
+
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950">
+            <input
+              type="checkbox"
+              checked={strict}
+              onChange={(e) => setStrict(e.target.checked)}
+              className="h-4 w-4 rounded border-violet-300 text-violet-600"
+            />
+            <div>
+              <div className="text-sm font-medium text-violet-800 dark:text-violet-200">
+                严格质检模式
+              </div>
+              <div className="text-xs text-violet-600 dark:text-violet-400">
+                本地多轮规则质检。与「官网检测循环」同时开启时，以官网检测为准。
+              </div>
             </div>
-          </div>
-        </label>
+          </label>
+        </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -319,7 +339,7 @@ export function HumanizerApp() {
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              {strict && mode !== "rules" ? "严格质检处理中..." : "处理中..."}
+              {strict && mode !== "rules" ? "严格质检处理中..." : verifyLoop && mode !== "rules" ? "官网检测循环处理中..." : "处理中..."}
             </>
           ) : (
             <>

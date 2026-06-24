@@ -5,6 +5,7 @@ import {
   AIUNDETECT_MIN_CHARS,
   getAiUndetectModelLabel,
   isAiUndetectAutoEnabled,
+  isAiUndetectVerifyEnabled,
 } from "@/lib/aiundetect";
 import { getAiConfigError } from "@/lib/ai-config";
 import { hasAnyAiHumanizer, runStrictPipeline } from "@/lib/qa-pipeline";
@@ -17,6 +18,7 @@ interface HumanizeRequest {
   mode?: HumanizeMode;
   intensity?: HumanizeIntensity;
   strict?: boolean;
+  verifyLoop?: boolean;
   targetScore?: number;
 }
 
@@ -28,6 +30,7 @@ export async function POST(request: Request) {
       mode = "hybrid",
       intensity = "standard",
       strict = false,
+      verifyLoop = isAiUndetectVerifyEnabled(),
       targetScore = 30,
     } = body;
 
@@ -99,6 +102,7 @@ export async function POST(request: Request) {
       intensity,
       targetScore,
       strict,
+      verifyLoop,
     });
 
     return NextResponse.json({
@@ -109,14 +113,17 @@ export async function POST(request: Request) {
       mode,
       intensity,
       strict,
+      verifyLoop,
       targetScore,
       provider: result.provider,
       aiundetect: result.provider === "aiundetect"
         ? {
             autoPerfect: isAiUndetectAutoEnabled(),
+            verifyLoop,
             model: getAiUndetectModelLabel(intensity),
           }
         : undefined,
+      officialDetection: result.officialDetection,
       improvement: result.beforeScore.score - result.afterScore.score,
       wordsUsed: result.wordsUsed,
       remainingWords: result.remainingWords,

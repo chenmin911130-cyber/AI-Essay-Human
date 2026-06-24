@@ -10,7 +10,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 interface ProviderBadgeProps {
   provider: string;
   remainingWords?: number;
-  aiundetect?: { autoPerfect: boolean; model: string };
+  aiundetect?: { autoPerfect: boolean; verifyLoop?: boolean; model: string };
 }
 
 export function ProviderBadge({ provider, remainingWords, aiundetect }: ProviderBadgeProps) {
@@ -26,6 +26,11 @@ export function ProviderBadge({ provider, remainingWords, aiundetect }: Provider
           <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
             Auto-Perfect {aiundetect.autoPerfect ? "ON" : "OFF"}
           </span>
+          {aiundetect.verifyLoop && (
+            <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+              官网检测循环
+            </span>
+          )}
           <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300">
             {aiundetect.model}
           </span>

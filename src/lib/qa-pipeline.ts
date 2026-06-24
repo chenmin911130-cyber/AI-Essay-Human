@@ -2,8 +2,10 @@ import { estimateAiScore, findAiPhrases, type DetectionResult } from "@/lib/dete
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
 import {
   humanizeWithAiUndetect,
+  humanizeWithVerifyLoop,
   hasAiUndetect,
   isAiUndetectAutoEnabled,
+  isAiUndetectVerifyEnabled,
 } from "@/lib/aiundetect";
 import { getAiModel, getAiProviderName, hasAiProvider } from "@/lib/ai-provider";
 import { buildHumanizePrompt } from "@/lib/prompts";
@@ -28,6 +30,14 @@ export interface QaReport {
 
 export type PipelineProvider = "aiundetect" | "openrouter" | "openai" | "rules";
 
+export interface OfficialDetectionReport {
+  available: boolean;
+  passed?: boolean;
+  aiPercent?: number;
+  attempts: number;
+  message?: string;
+}
+
 export interface StrictPipelineResult {
   text: string;
   beforeScore: DetectionResult;
@@ -36,6 +46,7 @@ export interface StrictPipelineResult {
   provider: PipelineProvider;
   wordsUsed?: number;
   remainingWords?: number;
+  officialDetection?: OfficialDetectionReport;
 }
 
 const DEFAULT_TARGET_SCORE = 30;
@@ -47,6 +58,7 @@ interface PipelineOptions {
   intensity: HumanizeIntensity;
   targetScore?: number;
   strict?: boolean;
+  verifyLoop?: boolean;
 }
 
 export function hasAnyAiHumanizer(): boolean {
@@ -108,16 +120,36 @@ function shouldUpdateBest(
 async function humanizeOnce(
   text: string,
   intensity: HumanizeIntensity,
-  language: ReturnType<typeof detectLanguage>
+  language: ReturnType<typeof detectLanguage>,
+  verifyLoop = isAiUndetectVerifyEnabled()
 ): Promise<{
   text: string;
   provider: PipelineProvider;
   wordsUsed?: number;
   remainingWords?: number;
+  officialDetection?: OfficialDetectionReport;
 }> {
   if (hasAiUndetect()) {
     try {
       const autoPerfect = isAiUndetectAutoEnabled();
+
+      if (verifyLoop && autoPerfect) {
+        const result = await humanizeWithVerifyLoop(text, intensity, { auto: true });
+        return {
+          text: result.text,
+          provider: "aiundetect",
+          wordsUsed: result.wordsUsed,
+          remainingWords: result.remainingWords,
+          officialDetection: {
+            available: result.detectionAvailable,
+            passed: result.detectionPassed,
+            aiPercent: result.detectionAiPercent,
+            attempts: result.attempts,
+            message: result.detectionMessage,
+          },
+        };
+      }
+
       let result = await humanizeWithAiUndetect(text, intensity, { auto: autoPerfect });
 
       if (!autoPerfect && isNearlySameText(text, result.text)) {
@@ -271,24 +303,58 @@ function buildQaReport(
 export async function runStrictPipeline(
   options: PipelineOptions
 ): Promise<StrictPipelineResult> {
-  const { text, intensity, targetScore = DEFAULT_TARGET_SCORE, strict = true } = options;
+  const {
+    text,
+    intensity,
+    targetScore = DEFAULT_TARGET_SCORE,
+    strict = true,
+    verifyLoop = isAiUndetectVerifyEnabled(),
+  } = options;
   const language = detectLanguage(text);
   const beforeScore = estimateAiScore(text);
-  // Auto-Perfect already iterates on AIUndetect's side — skip our multi-pass rules overlay.
-  const effectiveStrict = strict && !(hasAiUndetect() && isAiUndetectAutoEnabled());
+  // Auto-Perfect + verify loop already iterates on AIUndetect's side.
+  const effectiveStrict =
+    strict && !(hasAiUndetect() && (isAiUndetectAutoEnabled() || verifyLoop));
 
   if (!effectiveStrict) {
-    const result = await humanizeOnce(text, intensity, language);
+    const result = await humanizeOnce(text, intensity, language, verifyLoop);
     const afterScore = estimateAiScore(result.text);
     const checks = runValidationChecks(text, result.text, beforeScore, afterScore, targetScore);
+
+    if (result.officialDetection) {
+      checks.unshift({
+        id: "official_detection",
+        name: "AIUndetect 官网检测",
+        passed: result.officialDetection.available
+          ? (result.officialDetection.passed ?? false)
+          : true,
+        message:
+          result.officialDetection.message ??
+          (result.officialDetection.available
+            ? `官网 AI 率 ${result.officialDetection.aiPercent ?? "?"}%`
+            : "官网检测 API 不可用，已多轮 Auto-Perfect 改写"),
+      });
+    }
+
+    const qa = buildQaReport(checks, result.officialDetection?.attempts ?? 1, targetScore);
+    if (result.officialDetection?.passed) {
+      qa.confidence = "high";
+      qa.passed = checks.every((c) => c.passed);
+    } else if (result.officialDetection && !result.officialDetection.available) {
+      qa.warning =
+        result.officialDetection.message ??
+        "API 套餐可能不含官网检测次数。已自动多轮改写，请复制结果到 AIUndetect 官网手动检测。";
+    }
+
     return {
       text: result.text,
       beforeScore,
       afterScore,
-      qa: buildQaReport(checks, 1, targetScore),
+      qa,
       provider: result.provider,
       wordsUsed: result.wordsUsed,
       remainingWords: result.remainingWords,
+      officialDetection: result.officialDetection,
     };
   }
 
@@ -302,7 +368,7 @@ export async function runStrictPipeline(
 
   for (let pass = 1; pass <= MAX_PASSES && effectiveStrict; pass++) {
     passCount = pass;
-    const result = await humanizeOnce(current, intensity, language);
+    const result = await humanizeOnce(current, intensity, language, verifyLoop);
     provider = result.provider;
     if (result.wordsUsed) totalWordsUsed += result.wordsUsed;
     if (result.remainingWords !== undefined) remainingWords = result.remainingWords;
