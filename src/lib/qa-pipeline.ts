@@ -126,9 +126,8 @@ async function humanizeOnce(
         throw new Error("AIUNDETECT_UNCHANGED");
       }
 
-      const polished = humanizeWithRules(result.text, "aggressive");
       return {
-        text: polished,
+        text: result.text,
         provider: "aiundetect",
         wordsUsed: result.wordsUsed,
         remainingWords: result.remainingWords,
@@ -137,11 +136,12 @@ async function humanizeOnce(
       const message = error instanceof Error ? error.message : "";
       if (
         (message.startsWith("AIUNDETECT_TOO_SHORT") ||
+          message.includes("100-10000") ||
           message === "AIUNDETECT_UNCHANGED") &&
         hasAiProvider()
       ) {
         console.warn("AIUndetect fallback to OpenRouter:", message);
-      } else if (!message.startsWith("AIUNDETECT_TOO_SHORT") && hasAiProvider()) {
+      } else if (!message.includes("100-10000") && hasAiProvider()) {
         console.warn("AIUndetect failed, falling back to OpenRouter:", message);
       } else if (!hasAiProvider()) {
         throw error;

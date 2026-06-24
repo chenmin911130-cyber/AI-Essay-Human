@@ -186,7 +186,7 @@ export function HumanizerApp() {
               严格质检模式
             </div>
             <div className="text-xs text-violet-600 dark:text-violet-400">
-              多轮迭代 + 6 项质检，AI 率目标 ≤30%，自动选最优结果
+              多轮迭代 + 6 项质检，AI 率目标 ≤30%。AIUndetect 要求至少 100 字符。
             </div>
           </div>
         </label>

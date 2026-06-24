@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { estimateAiScore } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
+import { AIUNDETECT_MIN_CHARS } from "@/lib/aiundetect";
 import { getAiConfigError } from "@/lib/ai-config";
 import { hasAnyAiHumanizer, runStrictPipeline } from "@/lib/qa-pipeline";
 import { isNearlySameText } from "@/lib/utils";
@@ -71,6 +72,15 @@ export async function POST(request: Request) {
               : undefined,
         },
       });
+    }
+
+    if (text.length < AIUNDETECT_MIN_CHARS && hasAnyAiHumanizer()) {
+      return NextResponse.json(
+        {
+          error: `AIUndetect 官方要求每次改写至少 ${AIUNDETECT_MIN_CHARS} 字符，当前 ${text.length} 字符。请补充内容后再试。`,
+        },
+        { status: 400 }
+      );
     }
 
     if (!hasAnyAiHumanizer()) {
