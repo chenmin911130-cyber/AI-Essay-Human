@@ -3,6 +3,7 @@ import { estimateAiScore } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
 import { getAiConfigError } from "@/lib/ai-config";
 import { hasAnyAiHumanizer, runStrictPipeline } from "@/lib/qa-pipeline";
+import { isNearlySameText } from "@/lib/utils";
 
 export type HumanizeMode = "rules" | "ai" | "hybrid";
 
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
       improvement: result.beforeScore.score - result.afterScore.score,
       wordsUsed: result.wordsUsed,
       remainingWords: result.remainingWords,
+      unchanged: isNearlySameText(text, result.text),
       qa: result.qa,
     });
   } catch (error) {

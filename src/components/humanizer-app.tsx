@@ -13,7 +13,8 @@ import { LiveScore, ScoreComparison } from "@/components/score-badge";
 import { FileUpload } from "@/components/file-upload";
 import { ExportButton } from "@/components/export-button";
 import { QaReportPanel, type QaReport } from "@/components/qa-report";
-import { countWords } from "@/lib/utils";
+import { ProviderBadge } from "@/components/provider-badge";
+import { countWords, isNearlySameText } from "@/lib/utils";
 import type { DetectionResult } from "@/lib/detection";
 import type { HumanizeIntensity } from "@/lib/humanize-rules";
 
@@ -24,6 +25,9 @@ interface HumanizeResult {
   beforeScore: DetectionResult;
   afterScore: DetectionResult;
   improvement: number;
+  provider?: string;
+  remainingWords?: number;
+  unchanged?: boolean;
   qa?: QaReport;
 }
 
@@ -80,6 +84,9 @@ export function HumanizerApp() {
         beforeScore: data.beforeScore,
         afterScore: data.afterScore,
         improvement: data.improvement,
+        provider: data.provider,
+        remainingWords: data.remainingWords,
+        unchanged: isNearlySameText(input, data.humanized),
         qa: data.qa,
       });
     } catch {
@@ -257,6 +264,20 @@ export function HumanizerApp() {
       </div>
 
       {result && <ScoreComparison before={result.beforeScore} after={result.afterScore} />}
+
+      {result?.provider && (
+        <div className="flex flex-col items-center gap-2">
+          <ProviderBadge
+            provider={result.provider}
+            remainingWords={result.remainingWords}
+          />
+          {result.unchanged && (
+            <p className="text-center text-sm text-amber-600 dark:text-amber-400">
+              改写结果与原文几乎相同，请尝试「深度」强度或分段处理。
+            </p>
+          )}
+        </div>
+      )}
 
       {result?.qa && <QaReportPanel qa={result.qa} />}
 

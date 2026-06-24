@@ -3,7 +3,7 @@ import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules"
 import { humanizeWithAiUndetect, hasAiUndetect } from "@/lib/aiundetect";
 import { getAiModel, getAiProviderName, hasAiProvider } from "@/lib/ai-provider";
 import { buildHumanizePrompt } from "@/lib/prompts";
-import { detectLanguage } from "@/lib/utils";
+import { detectLanguage, isNearlySameText } from "@/lib/utils";
 import { generateText } from "ai";
 
 export interface QaCheck {
@@ -86,6 +86,21 @@ function pickBestCandidate(candidates: string[]): { text: string; score: Detecti
   return best;
 }
 
+function shouldUpdateBest(
+  original: string,
+  candidate: string,
+  candidateScore: number,
+  bestText: string,
+  bestScore: number
+): boolean {
+  const candidateChanged = !isNearlySameText(original, candidate);
+  const bestIsOriginal = isNearlySameText(original, bestText);
+
+  if (candidateScore < bestScore) return true;
+  if (bestIsOriginal && candidateChanged) return true;
+  return false;
+}
+
 async function humanizeOnce(
   text: string,
   intensity: HumanizeIntensity,
@@ -98,7 +113,19 @@ async function humanizeOnce(
 }> {
   if (hasAiUndetect()) {
     try {
-      const result = await humanizeWithAiUndetect(text, intensity);
+      let result = await humanizeWithAiUndetect(text, intensity);
+
+      if (isNearlySameText(text, result.text)) {
+        const preprocessed = humanizeWithRules(text, "aggressive");
+        if (!isNearlySameText(text, preprocessed)) {
+          result = await humanizeWithAiUndetect(preprocessed, "aggressive");
+        }
+      }
+
+      if (isNearlySameText(text, result.text) && hasAiProvider()) {
+        throw new Error("AIUNDETECT_UNCHANGED");
+      }
+
       const polished = humanizeWithRules(result.text, "aggressive");
       return {
         text: polished,
@@ -108,7 +135,13 @@ async function humanizeOnce(
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (!message.startsWith("AIUNDETECT_TOO_SHORT") && hasAiProvider()) {
+      if (
+        (message.startsWith("AIUNDETECT_TOO_SHORT") ||
+          message === "AIUNDETECT_UNCHANGED") &&
+        hasAiProvider()
+      ) {
+        console.warn("AIUndetect fallback to OpenRouter:", message);
+      } else if (!message.startsWith("AIUNDETECT_TOO_SHORT") && hasAiProvider()) {
         console.warn("AIUndetect failed, falling back to OpenRouter:", message);
       } else if (!hasAiProvider()) {
         throw error;
@@ -268,7 +301,7 @@ export async function runStrictPipeline(
     if (result.remainingWords !== undefined) remainingWords = result.remainingWords;
 
     const afterScore = estimateAiScore(result.text);
-    if (afterScore.score < bestAfterScore.score) {
+    if (shouldUpdateBest(text, result.text, afterScore.score, bestText, bestAfterScore.score)) {
       bestText = result.text;
       bestAfterScore = afterScore;
     }
@@ -315,6 +348,14 @@ export async function runStrictPipeline(
     bestAfterScore,
     targetScore
   );
+
+  const qa = buildQaReport(finalChecks, passCount, targetScore);
+  if (isNearlySameText(text, bestText)) {
+    qa.warning =
+      "改写结果与原文几乎相同。请尝试「深度」强度、关闭严格质检后重试，或分段处理长文。";
+    qa.confidence = "low";
+    qa.passed = false;
+  }
 
   return {
     text: bestText,

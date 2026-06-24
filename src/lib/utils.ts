@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function isNearlySameText(a: string, b: string): boolean {
+  const normalize = (s: string) => s.replace(/\s+/g, "").trim().toLowerCase();
+  return normalize(a) === normalize(b);
+}
+
 export function countWords(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
