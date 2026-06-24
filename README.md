@@ -6,8 +6,8 @@
 
 - **三种处理模式**
   - **规则模式** — 无需 API Key，基于规则即时替换 AI 常见用语
-  - **混合模式** — OpenRouter AI + 严格质检（推荐，需 API Key）
-  - **AI 模式** — 纯 OpenRouter 深度改写（需 API Key）
+  - **混合模式** — AIUndetect 专用改写 + 严格质检（推荐）
+  - **AI 模式** — 纯 AI 深度人性化改写
 - **三种改写强度** — 轻度 / 标准 / 深度
 - **AI 率估算** — 处理前后对比，基于文本特征启发式分析
 - **中英文支持** — 自动识别语言并适配改写策略
@@ -28,17 +28,19 @@ npm run dev
 
 ## 环境变量（可选）
 
-如需使用 AI / 混合模式，配置 OpenRouter API Key：
+如需使用 AI / 混合模式，配置 AIUndetect（推荐）或 OpenRouter：
 
 ```bash
 cp .env.example .env.local
-# 编辑 .env.local，填入 OPENROUTER_API_KEY
+# 编辑 .env.local，填入 AIUNDETECT_API_KEY 和 AIUNDETECT_EMAIL
 ```
 
 | 变量 | 说明 | 必填 |
 |------|------|------|
-| `OPENROUTER_API_KEY` | OpenRouter API 密钥（`sk-or-v1-` 格式） | AI/混合模式需要 |
-| `OPENROUTER_MODEL` | 模型 ID，默认 `openai/gpt-4o-mini` | 否 |
+| `AIUNDETECT_API_KEY` | AIUndetect API 密钥（主 API） | AI/混合模式首选 |
+| `AIUNDETECT_EMAIL` | AIUndetect 注册邮箱（与 Key 绑定） | 是 |
+| `OPENROUTER_API_KEY` | OpenRouter 备用密钥 | 否 |
+| `OPENROUTER_MODEL` | OpenRouter 模型 ID，默认 `openai/gpt-4o-mini` | 否 |
 | `OPENAI_API_KEY` | OpenAI 直连密钥（可选替代） | 否 |
 
 ## 技术栈
@@ -69,11 +71,12 @@ vercel --prod
 在 Vercel 项目 **Settings → Environment Variables** 中添加：
 
 ```
-OPENROUTER_API_KEY = sk-or-v1-你的密钥
-OPENROUTER_MODEL = openai/gpt-4o-mini
+AIUNDETECT_API_KEY = 你的密钥
+AIUNDETECT_EMAIL = 你的注册邮箱
+OPENROUTER_API_KEY = sk-or-v1-备用密钥（可选）
 ```
 
-保存后重新部署，AI / 混合模式即可使用 OpenRouter。
+保存后重新部署。优先使用 AIUndetect，失败时自动回退 OpenRouter。
 
 ### 方式三：GitHub Actions 自动部署
 

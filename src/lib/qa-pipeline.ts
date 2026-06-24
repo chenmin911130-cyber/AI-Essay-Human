@@ -1,14 +1,10 @@
-/**
- * Strict quality-assurance pipeline for humanization output.
- * Iterates, validates, and picks the best candidate until checks pass or max passes reached.
- */
-
-import { generateText } from "ai";
 import { estimateAiScore, findAiPhrases, type DetectionResult } from "@/lib/detection";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
+import { humanizeWithAiUndetect, hasAiUndetect } from "@/lib/aiundetect";
 import { getAiModel, getAiProviderName, hasAiProvider } from "@/lib/ai-provider";
 import { buildHumanizePrompt } from "@/lib/prompts";
 import { detectLanguage } from "@/lib/utils";
+import { generateText } from "ai";
 
 export interface QaCheck {
   id: string;
@@ -26,7 +22,7 @@ export interface QaReport {
   warning?: string;
 }
 
-export type PipelineProvider = "openrouter" | "openai" | "rules";
+export type PipelineProvider = "aiundetect" | "openrouter" | "openai" | "rules";
 
 export interface StrictPipelineResult {
   text: string;
@@ -34,6 +30,8 @@ export interface StrictPipelineResult {
   afterScore: DetectionResult;
   qa: QaReport;
   provider: PipelineProvider;
+  wordsUsed?: number;
+  remainingWords?: number;
 }
 
 const DEFAULT_TARGET_SCORE = 30;
@@ -45,6 +43,10 @@ interface PipelineOptions {
   intensity: HumanizeIntensity;
   targetScore?: number;
   strict?: boolean;
+}
+
+export function hasAnyAiHumanizer(): boolean {
+  return hasAiUndetect() || hasAiProvider();
 }
 
 async function humanizeWithLlm(
@@ -88,7 +90,32 @@ async function humanizeOnce(
   text: string,
   intensity: HumanizeIntensity,
   language: ReturnType<typeof detectLanguage>
-): Promise<{ text: string; provider: PipelineProvider }> {
+): Promise<{
+  text: string;
+  provider: PipelineProvider;
+  wordsUsed?: number;
+  remainingWords?: number;
+}> {
+  if (hasAiUndetect()) {
+    try {
+      const result = await humanizeWithAiUndetect(text, intensity);
+      const polished = humanizeWithRules(result.text, "aggressive");
+      return {
+        text: polished,
+        provider: "aiundetect",
+        wordsUsed: result.wordsUsed,
+        remainingWords: result.remainingWords,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.startsWith("AIUNDETECT_TOO_SHORT") && hasAiProvider()) {
+        console.warn("AIUndetect failed, falling back to OpenRouter:", message);
+      } else if (!hasAiProvider()) {
+        throw error;
+      }
+    }
+  }
+
   if (hasAiProvider()) {
     const providerName = getAiProviderName() ?? "openrouter";
     const candidates = await Promise.all([
@@ -220,6 +247,8 @@ export async function runStrictPipeline(
       afterScore,
       qa: buildQaReport(checks, 1, targetScore),
       provider: result.provider,
+      wordsUsed: result.wordsUsed,
+      remainingWords: result.remainingWords,
     };
   }
 
@@ -227,12 +256,16 @@ export async function runStrictPipeline(
   let bestText = text;
   let bestAfterScore = beforeScore;
   let provider: PipelineProvider = "rules";
+  let totalWordsUsed = 0;
+  let remainingWords: number | undefined;
   let passCount = 0;
 
   for (let pass = 1; pass <= MAX_PASSES; pass++) {
     passCount = pass;
     const result = await humanizeOnce(current, intensity, language);
     provider = result.provider;
+    if (result.wordsUsed) totalWordsUsed += result.wordsUsed;
+    if (result.remainingWords !== undefined) remainingWords = result.remainingWords;
 
     const afterScore = estimateAiScore(result.text);
     if (afterScore.score < bestAfterScore.score) {
@@ -252,6 +285,8 @@ export async function runStrictPipeline(
         afterScore,
         qa: buildQaReport(checks, pass, targetScore),
         provider,
+        wordsUsed: totalWordsUsed || undefined,
+        remainingWords,
       };
     }
 
@@ -265,7 +300,7 @@ export async function runStrictPipeline(
       continue;
     }
 
-    if (pass < MAX_PASSES && hasAiProvider()) {
+    if (pass < MAX_PASSES && hasAnyAiHumanizer()) {
       current = result.text;
       continue;
     }
@@ -287,5 +322,7 @@ export async function runStrictPipeline(
     afterScore: bestAfterScore,
     qa: buildQaReport(finalChecks, passCount, targetScore),
     provider,
+    wordsUsed: totalWordsUsed || undefined,
+    remainingWords,
   };
 }

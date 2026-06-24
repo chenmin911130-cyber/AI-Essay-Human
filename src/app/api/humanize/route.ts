@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { estimateAiScore } from "@/lib/detection";
-import { hasAiProvider } from "@/lib/ai-provider";
 import { humanizeWithRules, type HumanizeIntensity } from "@/lib/humanize-rules";
-import { runStrictPipeline } from "@/lib/qa-pipeline";
+import { hasAnyAiHumanizer, runStrictPipeline } from "@/lib/qa-pipeline";
 
 export type HumanizeMode = "rules" | "ai" | "hybrid";
 
@@ -72,10 +71,11 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!hasAiProvider()) {
+    if (!hasAnyAiHumanizer()) {
       return NextResponse.json(
         {
-          error: "AI 模式需要配置 OPENROUTER_API_KEY 或 OPENAI_API_KEY。",
+          error:
+            "AI 模式需要配置 AIUNDETECT_API_KEY + AIUNDETECT_EMAIL，或 OPENROUTER_API_KEY。",
         },
         { status: 503 }
       );
@@ -99,6 +99,8 @@ export async function POST(request: Request) {
       targetScore,
       provider: result.provider,
       improvement: result.beforeScore.score - result.afterScore.score,
+      wordsUsed: result.wordsUsed,
+      remainingWords: result.remainingWords,
       qa: result.qa,
     });
   } catch (error) {
