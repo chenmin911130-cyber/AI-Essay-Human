@@ -72,6 +72,14 @@ export function ScoreComparison({ before, after }: ScoreComparisonProps) {
           AI 率降低 {improvement}% ↓
         </div>
       )}
+      {improvement <= 0 && (
+        <div className="rounded-lg bg-amber-50 px-4 py-2 text-center text-sm text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+          处理后 AI 率未明显下降。若用 GPTZero/Turnitin 检测仍为 100%，属正常现象——本站评分仅为内部估算，与第三方检测器不同。
+        </div>
+      )}
+      <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+        本站 AI 率为启发式估算，不代表 GPTZero、Turnitin 等官方结果。
+      </p>
     </div>
   );
 }

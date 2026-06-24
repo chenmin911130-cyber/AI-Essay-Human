@@ -1,7 +1,11 @@
+import { countWords } from "@/lib/utils";
+
 /**
  * Heuristic AI detection scoring.
  * Estimates how "AI-like" text appears based on patterns common in LLM output.
  * Score: 0 (very human) → 100 (very AI-like)
+ *
+ * Note: This is NOT GPTZero/Turnitin — only a rough internal estimate.
  */
 
 const AI_PHRASES_EN = [
@@ -69,19 +73,8 @@ const AI_PHRASES_ZH = [
   "换言之",
   "一方面",
   "另一方面",
-  "首先",
-  "其次",
-  "最后",
-  "不仅",
-  "而且",
-  "随着",
-  "的发展",
-  "日益",
-  "愈发",
-  "愈发重要",
+  "随着科技的发展",
   "日益凸显",
-  "应运而生",
-  "应运而生",
   "应运而生",
 ];
 
@@ -151,11 +144,11 @@ function phraseDensity(text: string, phrases: string[]): number {
   let hits = 0;
   for (const phrase of phrases) {
     const regex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    const matches = lower.match(regex);
-    hits += matches?.length ?? 0;
+    const haystack = /[\u4e00-\u9fff]/.test(phrase) ? text : lower;
+    hits += haystack.match(regex)?.length ?? 0;
   }
-  const wordCount = text.split(/\s+/).filter(Boolean).length || 1;
-  return hits / wordCount;
+  const unitCount = countWords(text) || text.length || 1;
+  return hits / unitCount;
 }
 
 export interface DetectionResult {
